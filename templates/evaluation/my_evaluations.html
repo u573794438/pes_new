@@ -66,11 +66,9 @@
                         <thead>
                             <tr>
                                 <th>姓名</th>
-                                <th>本职工作(50%)</th>
-                                <th>附加业绩(20%)</th>
-                                <th>合规守纪(15%)</th>
-                                <th>互助(10%)</th>
-                                <th>勤勉(5%)</th>
+                                {% for dimension in dimensions %}
+                                <th>{{ dimension.name }}({{ (dimension.weight * 100)|int }}%)</th>
+                                {% endfor %}
                                 <th>合计</th>
                                 <th>状态</th>
                                 <th>操作</th>
@@ -80,11 +78,9 @@
                             {% for evaluation in task_evaluations %}
                             <tr>
                                 <td>{{ evaluation.evaluatee.name }}</td>
-                                <td>{% set dim = evaluation.scores|selectattr('dimension.name', 'equalto', '本职工作')|first %}{{ (dim.score * 10)|int if dim else 0 }}</td>
-                                <td>{% set dim = evaluation.scores|selectattr('dimension.name', 'equalto', '附加业绩')|first %}{{ (dim.score * 4)|int if dim else 0 }}</td>
-                                <td>{% set dim = evaluation.scores|selectattr('dimension.name', 'equalto', '合规守纪')|first %}{{ (dim.score * 3)|int if dim else 0 }}</td>
-                                <td>{% set dim = evaluation.scores|selectattr('dimension.name', 'equalto', '互助')|first %}{{ (dim.score * 2)|int if dim else 0 }}</td>
-                                <td>{% set dim = evaluation.scores|selectattr('dimension.name', 'equalto', '勤勉')|first %}{{ (dim.score * 1)|int if dim else 0 }}</td>
+                                {% for dimension in dimensions %}
+                                <td>{% set dim = evaluation.scores|selectattr('dimension.id', 'equalto', dimension.id)|first %}{{ (dim.score * (dimension.weight * 20))|int if dim else 0 }}</td>
+                                {% endfor %}
                                 <td>{{ evaluation.total_score|int }}</td>
                                 <td>
                                     {% if evaluation.status == 'submitted' %}

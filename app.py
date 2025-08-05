@@ -257,8 +257,6 @@ def my_evaluations():
     # 任务隔离：添加任务筛选条件
     if task_id:
         query = query.filter_by(task_id=task_id)
-    if evaluator_id:
-        query = query.filter_by(evaluator_id=evaluator_id)
     
     # 执行查询
     evaluations = query.order_by(EvaluationRecord.submitted_at.desc()).all()
@@ -275,7 +273,10 @@ def my_evaluations():
     # 获取所有任务供筛选
     tasks = EvaluationTask.query.all()
 
-    return render_template('evaluation/my_evaluations.html', evaluations=evaluations, tasks=tasks, selected_task_id=task_id, task_withdrawal_status=task_withdrawal_status)
+    # 获取所有评估维度
+    dimensions = EvaluationDimension.query.filter_by(status='published').order_by(EvaluationDimension.id).all()
+
+    return render_template('evaluation/my_evaluations.html', evaluations=evaluations, tasks=tasks, selected_task_id=task_id, task_withdrawal_status=task_withdrawal_status, dimensions=dimensions)
 
 
 @app.route('/request_withdrawal/<int:task_id>', methods=['POST'])
