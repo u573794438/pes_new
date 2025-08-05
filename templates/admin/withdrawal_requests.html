@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}撤回申请管理{% endblock %}
+
+{% block styles %}
+<style>
+/* 强制显示按钮 */
+.btn-primary {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>撤回申请管理</h2>
+    {% if requests|length > 0 %}
+    <div class="mb-4">
+        <a href="{{ url_for('batch_approve_all_withdrawals') }}" class="btn btn-success btn-lg" onclick="return confirm('确定要批准所有撤回申请吗？')">
+            一键批准所有申请
+        </a>
+    </div>
+    {% endif %}
+    <p class="text-muted">当前共有 {{ requests|length }} 条撤回申请</p>
+
+    {% if requests %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>评估者</th>
+                        <th>被评估者</th>
+                        <th>评估任务</th>
+                        <th>撤回原因</th>
+                        <th>提交时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <!-- 按任务和评估者分组显示 -->
+                {% if requests|length > 0 %}
+                    <!-- 表格数据 -->
+                    {% for task_id, task_group in requests|groupby('task.id') %}
+                        <tr class="table-secondary">
+                            <th colspan="6">{{ task_group[0].task.name }}</th>
+                        </tr>
+                        {% for evaluator_id, evaluator_group in task_group|groupby('evaluator.id') %}
+                        <tr class="table-light">
+                            <td colspan="5"><strong>评估者: {{ evaluator_group[0].evaluator.name }}</strong></td>
+                            <td>
+                                <a href="{{ url_for('batch_approve_withdrawal_by_evaluator', task_id=task_id, evaluator_id=evaluator_id) }}" class="btn btn-primary" onclick="return confirm('确定要批准该评估者在该任务下的所有撤回申请吗？')">
+                                    批量批准
+                                </a>
+                            </td>
+                        </tr>
+                        {% for request in evaluator_group %}
+                        <tr>
+                            <td>{{ request.evaluator.name }}</td>
+                            <td>{{ request.evaluatee.name }}</td>
+                            <td>{{ request.task.name }}</td>
+                            <td>{{ request.withdrawal_reason }}</td>
+                            <td>{{ request.updated_at|shanghai_time }}</td>
+                            <td>
+                                <a href="{{ url_for('approve_withdrawal', id=request.id) }}" class="btn btn-primary">批准单个</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% endfor %}
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center">
+                            暂无撤回申请数据
+                        </td>
+                    </tr>
+                {% endif %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            暂无撤回申请
+        </div>
+    {% endif %}
+
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">返回仪表盘</a>
+</div>
+{% endblock %}

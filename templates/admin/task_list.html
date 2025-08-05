@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+
+{% block title %}评估任务管理{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3>评估任务列表</h3>
+    <div>
+        <a href="{{ url_for('admin_add_task') }}" class="btn btn-primary me-2">
+            <i class="bi bi-plus-circle me-1"></i> 新增评估任务
+        </a>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-1"></i> 返回管理后台
+        </a>
+    </div>
+</div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>任务名称</th>
+                        <th>年份</th>
+                        <th>季度</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks %}
+                    <tr>
+                        <td>{{ task.id }}</td>
+                        <td>{{ task.name }}</td>
+                        <td>{{ 2000 + task.year if task.year < 100 else task.year }}</td>
+                        <td>{{ task.quarter }}</td>
+                        <td>
+                            {% if task.status == 'published' %}
+                                <span class="badge bg-success">已发布</span>
+                            {% else %}
+                                <span class="badge bg-secondary">草稿</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ task.created_at|shanghai_time('%Y-%m-%d') }}</td>
+                        <td>
+                            <button type="button" class="btn btn-warning btn-sm me-2" data-bs-toggle="modal" data-bs-target="#clearModal{{ task.id }}">
+                                清除数据
+                            </button>
+                            <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteModal{{ task.id }}">
+                                删除
+                            </button>
+                            <!-- 清除数据确认模态框 -->
+                            <div class="modal fade" id="clearModal{{ task.id }}" tabindex="-1" aria-labelledby="clearModalLabel" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="clearModalLabel">确认清除数据</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>确定要清除任务 <strong>{{ task.name }}</strong> 的所有评估数据吗？</p>
+                                            <p class="text-danger">警告：此操作将删除该任务下的所有评估记录，但保留任务本身，且操作无法恢复！</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                            <a href="{{ url_for('admin_clear_task_data', task_id=task.id) }}" class="btn btn-warning">确认清除</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 删除确认模态框 -->
+                            <div class="modal fade" id="deleteModal{{ task.id }}" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="deleteModalLabel">确认删除</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>确定要删除任务 <strong>{{ task.name }}</strong> 吗？</p>
+                                            <p class="text-danger">警告：此操作将同时删除该任务下的所有评估记录，且无法恢复！</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                            <a href="{{ url_for('admin_delete_task', id=task.id) }}" class="btn btn-danger">确认删除</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center">暂无评估任务</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

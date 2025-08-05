@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+
+{% block title %}批量评估打分{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>批量评估打分 - {{ task.name }}</h2>
+    {% if has_pending_withdrawal %}
+    <div class="alert alert-warning" role="alert">
+        <strong>注意：</strong>该任务已提交撤回申请，待审核中，不能发起新的评估。
+    </div>
+    {% endif %}
+    <div class="alert alert-info mb-4">
+        分数1~5分，最小单位0.5分。提交后需要修改请通知管理员。
+    </div>
+    <form id="batchEvaluationForm" method="POST" action="{{ url_for('submit_batch_evaluation') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="evaluator_id" value="{{ evaluator_id }}">
+        <input type="hidden" name="task_id" value="{{ task_id }}">
+        
+        <div class="mb-4">
+            <button type="button" id="fillAllScores" class="btn btn-primary btn-sm">使用默认值填充打分项</button>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover">
+                <thead>
+                    <tr>
+                        <th class="text-center align-middle" rowspan="2">评估对象</th>
+                        {% for dimension in dimensions %}
+                            <th class="text-center" colspan="1">
+                                评估维度
+                            </th>
+                        {% endfor %}
+                    </tr>
+                    <tr>
+                        {% for dimension in dimensions %}
+                            <th class="text-center">
+                                {{ dimension.name }}<br>
+                                <small class="text-muted">(权重: {{ dimension.weight*100 }}%)</small>
+                            </th>
+                        {% endfor %}
+                    </tr>
+                    <tr class="fill-settings-row">
+                        <td class="text-end"><strong>维度默认值：</strong></td>
+                        {% for dimension in dimensions %}
+                            <td>
+                                <input type="number" id="fillScoreInput-{{ dimension.id }}" class="form-control score-input" min="1" max="5" step="0.5" value="3.5" placeholder="">
+                            </td>
+                        {% endfor %}
+                    </tr>
+
+                </thead>
+                <tbody>
+                    {% for evaluatee in evaluatees %}
+                        <tr>
+                            <td class="align-middle">
+                                <strong>{{ evaluatee.name }}</strong><br>
+                                <small>{{ evaluatee.position }}</small>
+                            </td>
+                            {% for dimension in dimensions %}
+                                <td>
+                                    <input type="number"
+                                           name="scores[{{ evaluatee.id }}][{{ dimension.id }}]"
+                                           class="form-control score-input"
+                                           min="1"
+                                           max="5"
+                                           step="0.5"
+                                           required
+                                           value="3.5">
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="d-flex mt-4">
+            <button type="button" class="btn btn-secondary mr-2" onclick="window.location.href='{{ url_for('evaluate_page') }}';">返回</button>
+            <button type="submit" class="btn btn-success{% if has_pending_withdrawal %} disabled{% endif %}" name="action" value="submit" {% if has_pending_withdrawal %}disabled="disabled"{% endif %}>提交评估</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 确保DOM加载完成后执行
+document.addEventListener('DOMContentLoaded', function() {
+    // 获取元素
+    const fillAllScoresBtn = document.getElementById('fillAllScores');
+    const columnFillInputs = document.querySelectorAll('.fill-settings-row .score-input');
+
+    console.log('按列一键填充功能初始化');
+    console.log('按钮元素:', fillAllScoresBtn);
+    console.log('列填充输入框数量:', columnFillInputs.length);
+
+    // 加载保存的默认值
+    function loadDefaultScores() {
+        const savedScores = localStorage.getItem('dimensionDefaultScores');
+        if (savedScores) {
+            try {
+                const scores = JSON.parse(savedScores);
+                columnFillInputs.forEach((input, index) => {
+                    if (scores[index] !== undefined) {
+                        input.value = scores[index];
+                        console.log('加载保存的默认值: 第 ' + (index + 1) + ' 列为 ' + scores[index]);
+                    }
+                });
+            } catch (e) {
+                console.error('解析保存的默认值失败:', e);
+            }
+        }
+    }
+
+    // 保存默认值
+    function saveDefaultScores() {
+        const scores = Array.from(columnFillInputs).map(input => input.value);
+        localStorage.setItem('dimensionDefaultScores', JSON.stringify(scores));
+        console.log('保存默认值到localStorage:', scores);
+    }
+
+    // 为每个列填充输入框添加实时验证
+    columnFillInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            const score = this.value;
+            const numScore = parseFloat(score);
+            if (!isNaN(numScore) && numScore >= 1 && numScore <= 5 && numScore % 0.5 === 0) {
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            } else if (score !== '') {
+                this.classList.remove('is-valid');
+                this.classList.add('is-invalid');
+            } else {
+                this.classList.remove('is-valid');
+                this.classList.remove('is-invalid');
+            }
+        });
+    });
+
+    // 一键填充功能
+    if (fillAllScoresBtn) {
+        fillAllScoresBtn.addEventListener('click', function() {
+            console.log('一键填充按钮被点击');
+            let isValid = true;
+            let validationErrors = [];
+
+            // 检查所有列填充输入框的有效性
+            columnFillInputs.forEach((input, index) => {
+                const score = input.value;
+                const numScore = parseFloat(score);
+                if (!isNaN(numScore) && numScore >= 1 && numScore <= 5 && numScore % 0.5 === 0) {
+                    input.classList.remove('is-invalid');
+                    input.classList.add('is-valid');
+                } else {
+                    isValid = false;
+                    input.classList.remove('is-valid');
+                    input.classList.add('is-invalid');
+                    validationErrors.push('第 ' + (index + 1) + ' 列的填充值无效');
+                }
+            });
+
+            // 如果所有输入都有效，则按列填充并保存默认值
+            if (isValid) {
+                console.log('所有填充值验证通过，开始按列填充');
+                // 获取所有评分行
+                const rows = document.querySelectorAll('tbody tr');
+
+                // 遍历每一行和每一列
+                rows.forEach(row => {
+                    const scoreInputs = row.querySelectorAll('.score-input');
+                    scoreInputs.forEach((input, columnIndex) => {
+                        if (columnIndex < columnFillInputs.length) {
+                            const fillValue = columnFillInputs[columnIndex].value;
+                            input.value = fillValue;
+                            console.log('填充行 ' + (Array.from(rows).indexOf(row) + 1) + ' 列 ' + (columnIndex + 1) + ' 为 ' + fillValue);
+                        }
+                    });
+                });
+
+                // 保存默认值
+                saveDefaultScores();
+                alert('默认值已保存，下次评估时将自动加载');
+
+                // 2秒后移除成功提示
+                setTimeout(() => {
+                    columnFillInputs.forEach(input => {
+                        input.classList.remove('is-valid');
+                    });
+                }, 2000);
+            } else {
+                // 显示错误信息
+                console.error('填充值验证失败:', validationErrors);
+                alert('请检查以下列的填充值:\n' + validationErrors.join('\n'));
+            }
+        });
+    } else {
+        console.error('未找到一键填充按钮');
+    }
+
+    // 页面加载时尝试加载保存的默认值
+    loadDefaultScores();
+});
+</script>
+{% endblock %}

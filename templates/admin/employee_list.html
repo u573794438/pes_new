@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+
+{% block title %}人员信息维护 - 员工绩效互评系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>员工信息管理</h2>
+    <div>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary me-2">
+            <i class="bi bi-arrow-left me-1"></i> 返回管理后台
+        </a>
+        <a href="{{ url_for('admin_employee_add') }}" class="btn btn-primary me-2">添加员工</a>
+
+<button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#importModal">
+    <i class="bi bi-upload me-1"></i> 批量导入
+</button>
+    </div>
+</div>
+
+        <div class="card">
+            <div class="card-body">
+                {% if employees %} 
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>姓名</th>
+                                <th>岗位</th>
+                                <th>创建时间</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for employee in employees %}
+                            <tr>
+                                <td>{{ employee.employee_id }}</td>
+                                <td>{{ employee.name }}</td>
+                                <td>{{ employee.position }}</td>
+                                <td>{{ employee.created_at|shanghai_time('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    {% if employee.is_frozen %}
+                                        <span class="badge bg-danger">已冻结</span>
+                                    {% else %}
+                                        <span class="badge bg-success">正常</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('admin_employee_reset_password', employee_id=employee.employee_id) }}" class="btn btn-sm btn-outline-warning">
+                                            <i class="bi bi-key"></i> 密码重置
+                                        </a>
+                                        <a href="{{ url_for('admin_employee_toggle_frozen', employee_id=employee.employee_id) }}" class="btn btn-sm {% if employee.is_frozen %}btn-outline-success{% else %}btn-outline-danger{% endif %}">
+                                            {% if employee.is_frozen %}
+                                                <i class="bi bi-unlock"></i> 解冻
+                                            {% else %}
+                                                <i class="bi bi-lock"></i> 冻结
+                                            {% endif %}
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ employee.id }}">
+                                            <i class="bi bi-trash"></i> 删除
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- 删除确认模态框 -->
+                            <div class="modal fade" id="deleteModal{{ employee.id }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">确认删除</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>确定要删除员工 <strong>{{ employee.name }}</strong> 吗？此操作不可撤销。</p>
+                                            <p class="text-danger">警告：删除员工将同时删除与此员工相关的所有评估记录！</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                            <a href="{{ url_for('admin_employee_delete', id=employee.id) }}" class="btn btn-danger">确认删除</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>暂无员工信息，请点击上方"添加员工"按钮添加。
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<!-- 批量导入模态框 -->
+<div class="modal fade" id="importModal" tabindex="-1" aria-labelledby="importModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="importModalLabel">批量导入员工</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="importForm" action="{{ url_for('admin_employee_import') }}" method="post" enctype="multipart/form-data">
+{{ form.hidden_tag() }}
+<div class="alert alert-info mb-3">
+  <strong>导入格式说明：</strong>
+  <ul>
+    <li>请使用.xlsx格式的Excel文件</li>
+    <li>第一行必须包含表头：姓名、职位、默认密码</li>
+    <li>示例：<br>姓名	职位	默认密码<br>张三	工程师	123456<br>李四	设计师	123456</li>
+  </ul>
+</div>
+                    <div class="mb-3">
+                        <label for="file" class="form-label">选择Excel文件 (.xlsx)</label>
+                        <input class="form-control" type="file" id="file" name="file" accept=".xlsx" required>
+                        <div class="form-text">表头需包含：姓名、职位、默认密码</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="submit" form="importForm" class="btn btn-primary">导入</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+{% endblock %}

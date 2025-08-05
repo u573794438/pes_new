@@ -1,0 +1,79 @@
+<h5>步骤3: 填写评估分数 - {{ evaluatee.name }} ({{ evaluatee.position }})</h5>
+<form id="evaluationForm" method="POST" action="{{ url_for('submit_evaluation') }}">
+    <input type="hidden" name="evaluator_id" value="{{ evaluator_id }}">
+    <input type="hidden" name="evaluatee_id" value="{{ evaluatee_id }}">
+    {{ form.hidden_tag() }}
+
+    <div class="card p-3 border mb-3">
+        <h6 class="text-muted mb-3">请为以下维度打分 (1-5分，5分为最高分)</h6>
+
+        {% for score in form.scores %}
+            {% set dimension = dimensions[loop.index0] if loop.index0 < dimensions|length else None %}
+            {% if not dimension or dimension.id is none or dimension.id == 'None' %}
+                {# Skip invalid dimensions #}
+            {% else %}
+                <div class="form-group">
+                    <label>{{ dimension.name }} (权重: {{ dimension.weight*100 }}%) - 权重: {{ dimension.weight }}</label>
+                    {{ score.score(class="form-control", id="score-" ~ dimension.id, onchange="updateScore({{ dimension.id }})") }}
+                    {{ score.dimension_id(type="hidden") }}
+                    {% if score.score.errors %}
+                        <div class="text-danger">
+                            {% for error in score.score.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="card p-3 border mb-3 bg-light">
+        <h6><strong>总分预览: <span id="totalScore">0</span>/100</strong></h6>
+        <p class="text-muted">注: 总分根据各维度得分和权重计算得出</p>
+    </div>
+
+    <div class="d-flex justify-content-between">
+        <button type="submit" name="action" value="save_draft" class="btn btn-outline-secondary">保存草稿</button>
+        <button type="submit" name="action" value="submit" class="btn btn-primary">提交评估</button>
+    </div>
+</form>
+
+<script>
+// 初始化分数显示
+document.addEventListener('DOMContentLoaded', function() {
+    updateAllScores();
+    calculateTotalScore();
+});
+
+// 更新单个分数显示
+function updateScore(rangeInput) {
+    const dimensionId = rangeInput.id.split('-')[1];
+    const scoreValue = parseFloat(rangeInput.value).toFixed(1);
+    document.getElementById(`scoreValue${dimensionId}`).textContent = scoreValue;
+    document.getElementById(`displayScore${dimensionId}`).textContent = scoreValue;
+    calculateTotalScore();
+}
+
+// 更新所有分数显示
+function updateAllScores() {
+    document.querySelectorAll('input[type="range"]').forEach(rangeInput => {
+        const dimensionId = rangeInput.id.split('-')[1];
+        const scoreValue = parseFloat(rangeInput.value).toFixed(1);
+        document.getElementById(`scoreValue${dimensionId}`).textContent = scoreValue;
+        document.getElementById(`displayScore${dimensionId}`).textContent = scoreValue;
+    });
+}
+
+// 计算总分
+function calculateTotalScore() {
+    let total = 0;
+    {% for dimension in dimensions %}
+        const score_dim{{ dimension.id }} = parseFloat(document.querySelector('#score-{{ dimension.id }}').value);
+        total += score_dim{{ dimension.id }} * {{ "%.10g"|format(dimension.weight) }};
+    {% endfor %}
+    // 转换为百分制并保留一位小数
+    const totalScore = (total * 20).toFixed(1);
+    document.getElementById('totalScore').textContent = totalScore;
+}
+</script>

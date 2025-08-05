@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block title %}首页 - 员工绩效互评系统{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-8 text-center">
+        <h1 class="mb-4">欢迎使用员工绩效互评系统</h1>
+        <p class="lead mb-5">请选择以下操作进入相应功能模块</p>
+
+        <div class="d-grid gap-3 col-md-6 mx-auto">
+            <a href="{{ url_for('evaluate_page') }}" class="btn btn-primary btn-lg">
+                <i class="bi bi-pencil-square me-2"></i>绩效打分
+            </a>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary btn-lg">
+                <i class="bi bi-speedometer2 me-2"></i>管理后台
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">系统说明</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">• 绩效打分：员工对其他同事进行绩效评估打分</li>
+                    <li class="list-group-item">• 管理后台：维护员工信息、评估维度和查询评估结果</li>
+
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+{% endblock %}

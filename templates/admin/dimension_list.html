@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}评估维度管理 - 员工绩效互评系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3>评估维度管理</h3>
+    <div>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary me-2">
+            <i class="bi bi-arrow-left me-1"></i> 返回管理后台
+        </a>
+        <a href="{{ url_for('admin_dimension_add') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>添加维度
+        </a>
+    </div>
+</div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">维度权重信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>所有评估维度的权重总和必须为100%。
+                    当前总权重: <strong>{{ total_weight*100 }}%</strong>
+                    {% if total_weight != 1 %}
+                        <span class="text-danger">(权重总和不为100%，请调整)</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                {% if dimensions %} 
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>维度名称</th>
+                                <th>权重</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for dimension in dimensions %}
+                            <tr>
+                                <td>{{ dimension.id }}</td>
+                                <td>{{ dimension.name }}</td>
+                                <td>{{ dimension.weight*100 }}%</td>
+                                <td>{{ dimension.created_at|shanghai_time('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('admin_dimension_edit', id=dimension.id) }}" class="btn btn-sm btn-outline-success">
+                                            <i class="bi bi-pencil"></i> 编辑
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ dimension.id }}">
+                                            <i class="bi bi-trash"></i> 删除
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- 删除确认模态框 -->
+                            <div class="modal fade" id="deleteModal{{ dimension.id }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">确认删除</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>确定要删除评估维度 <strong>{{ dimension.name }}</strong> 吗？此操作不可撤销。</p>
+                                            <p class="text-danger">警告：删除维度将影响所有相关的评估记录！</p>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                            <a href="{{ url_for('admin_dimension_delete', id=dimension.id) }}" class="btn btn-danger">确认删除</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>暂无评估维度信息，请点击上方"添加维度"按钮添加。
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+{% endblock %}

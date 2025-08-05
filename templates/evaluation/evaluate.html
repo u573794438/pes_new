@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+
+{% block title %}绩效打分 - 员工绩效互评系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">绩效互评打分</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('evaluate_page') }}">
+                    {{ form.hidden_tag() }}
+
+                    <!-- 已移除步骤1: 当前评估者卡片 -->
+
+                    {% if tasks and current_evaluator %}                    
+                    <div class="mb-4">
+                        <h5>步骤1: 选择评估任务</h5>
+                        <div class="card p-3 border">
+                            <div class="row mb-3">
+                                <div class="col-sm-12">
+                                    <input type="hidden" id="selectedTaskId" name="task_id" value="{{ selected_task.id if selected_task else '' }}">
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover">
+                                            <thead class="thead-light">
+                                                <tr>
+                                                    <th>任务名称</th>
+                                                    <th>年份季度</th>
+                                                    <th>状态</th>
+                                                    <th>操作</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% if tasks %}
+                                                    {% for task in tasks %}
+                                                        <tr class="{% if selected_task and selected_task.id == task.id %}table-primary{% endif %}" data-task-id="{{ task.id }}">
+                                                            <td>{{ task.name }}</td>
+                                                            <td>{{ task.year }}年 {{ task.quarter }}季度</td>
+                                                            <td><span class="badge {% if task.status == 'published' %}bg-primary{% else %}bg-secondary{% endif %}">{{ task.status }}</span></td>
+                                                            <td>
+                                                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="redirectToBatchEvaluation({{ task.id }})">批量评估</button>
+                                                            </td>
+                                                        </tr>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <tr>
+                                                        <td colspan="4" class="text-center"><div class="alert alert-info mb-0">暂无可用的评估任务</div></td>
+                                                    </tr>
+                                                {% endif %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% endif %}
+
+                    {% if evaluatees and current_evaluator and selected_task %}
+                    <div class="mb-4">
+                        <h5>步骤2: 选择评估对象</h5>
+                        <div class="card p-3 border">
+                            <div class="row mb-3">
+                                <label class="col-sm-2 col-form-label">评估对象:</label>
+                                <div class="col-sm-4">
+                                    <select class="form-select" id="evaluateeSelect" onchange="loadEvaluationForm()">
+                                        <option value="">-- 请选择评估对象 --</option>
+                                        {% for employee in evaluatees %}
+                                            <option value="{{ employee.id }}">{{ employee.name }} ({{ employee.position }})</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-sm-6">
+                                    <span class="text-muted">当前评估者: {{ current_evaluator.name }} ({{ current_evaluator.position }})</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between mb-4">
+                            <h2>选择评估对象</h2>
+                            <a href="{{ url_for('batch_evaluate', evaluator_id=current_evaluator.id) }}" class="btn btn-primary">
+                                <i class="fas fa-table"></i> 批量评估所有对象
+                            </a>
+                        </div>
+                    </div>
+
+                    <div id="evaluationFormContainer" class="mb-4">
+                        <h5>步骤3: 填写评估分数</h5>
+                        <div class="card p-3 border">
+                            <div class="alert alert-info">请先选择评估对象</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function redirectToBatchEvaluation(taskId) {
+    var evaluatorId = '{{ current_evaluator.id|tojson|safe }}';
+    // 自动选择第一个任务（如果有）
+    if (!taskId) {
+        var firstTaskRow = document.querySelector('tr[data-task-id]');
+        if (firstTaskRow) {
+            taskId = firstTaskRow.getAttribute('data-task-id');
+        }
+    }
+    
+    if (taskId) {
+        // 更新隐藏字段
+        document.getElementById('selectedTaskId').value = taskId;
+        window.location.href = '/batch_evaluate?evaluator_id=' + encodeURIComponent(evaluatorId) + '&task_id=' + encodeURIComponent(taskId);
+    } else {
+        alert('没有可用的评估任务');
+    }
+}
+
+function loadEvaluationForm() {
+    var evaluateeId = document.getElementById('evaluateeSelect').value;
+    var evaluatorId = '{{ current_evaluator.id|tojson|safe }}';
+    var container = document.getElementById('evaluationFormContainer');
+
+    if (!evaluateeId) {
+        container.innerHTML = '<h5>步骤3: 填写评估分数</h5><div class="card p-3 border"><div class="alert alert-info">请先选择评估对象</div></div>';
+        return;
+    }
+
+    // 自动选择第一个任务（如果有）
+    var taskId = document.getElementById('selectedTaskId').value;
+    if (!taskId) {
+        var firstTaskRow = document.querySelector('tr[data-task-id]');
+        if (firstTaskRow) {
+            taskId = firstTaskRow.getAttribute('data-task-id');
+            document.getElementById('selectedTaskId').value = taskId;
+        }
+    }
+
+    if (!taskId) {
+        container.innerHTML = '<h5>步骤3: 填写评估分数</h5><div class="card p-3 border"><div class="alert alert-danger">没有可用的评估任务</div></div>';
+        return;
+    }
+
+    container.innerHTML = '<h5>步骤3: 填写评估分数</h5><div class="card p-3 border"><div class="d-flex justify-content-center mb-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div></div>';
+
+    // AJAX请求加载评估表单
+    var url = '/get_evaluation_form/' + encodeURIComponent(evaluateeId) + '?evaluator_id=' + encodeURIComponent(evaluatorId) + '&task_id=' + encodeURIComponent(taskId);
+    fetch(url)
+        .then(function(response) {
+            return response.text();
+        })
+        .then(function(html) {
+            container.innerHTML = html;
+        })
+        .catch(function(error) {
+            container.innerHTML = '<h5>步骤3: 填写评估分数</h5><div class="card p-3 border"><div class="alert alert-danger">加载评估表单失败: ' + error + '</div></div>';
+        });
+}
+</script>
+{% endblock %}
