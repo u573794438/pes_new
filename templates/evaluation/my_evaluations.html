@@ -10,14 +10,69 @@
 {% set returned_evaluations = evaluations|selectattr('status', 'equalto', 'returned')|list %}
 {% set has_returned_evaluations = returned_evaluations|length > 0 %}
 
-{# 增强的调试信息 #}
-<div class="alert alert-info mb-4">
-    评估记录总数: {{ evaluations|length }}<br>
-    已退回评估数量: {{ returned_evaluations|length }}<br>
-    存在已退回评估: {{ '是' if has_returned_evaluations else '否' }}
-    {% if returned_evaluations %}
-        <br>已退回评估ID列表: {{ returned_evaluations|map(attribute='id')|list }}
-    {% endif %}
+{# 紧凑的统计信息卡片 #}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">评估统计</h5>
+        <button class="btn btn-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#statsDetail" aria-expanded="false" aria-controls="statsDetail">
+            详情
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-sm-4 col-md-3">
+                <div class="score-card">
+                    <p class="text-sm text-muted mb-1">评估记录总数</p>
+                    <p class="fs-3 font-bold text-primary">{{ evaluations|length }}</p>
+                </div>
+            </div>
+            <div class="col-sm-4 col-md-3">
+                <div class="score-card">
+                    <p class="text-sm text-muted mb-1">已退回评估</p>
+                    <p class="fs-3 font-bold text-warning">{{ returned_evaluations|length }}</p>
+                </div>
+            </div>
+            <div class="col-sm-4 col-md-3">
+                <div class="score-card">
+                    <p class="text-sm text-muted mb-1">状态分布</p>
+                    <div class="flex flex-wrap gap-1 mt-1">
+                        {% set status_counts = evaluations|groupby('status')|list %}
+                        {% for status, items in status_counts %}
+                            {% set status_color = 'primary' if status == 'submitted' else 'warning' if status == 'returned' else 'info' if status == 'withdrawal_requested' else 'danger' %}
+                            <span class="badge bg-{{ status_color }}">{{ status }}: {{ items|length }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-12 col-md-3">
+                <div class="score-card h-100 d-flex flex-column justify-center">
+                    {% if has_returned_evaluations %}
+                        <span class="text-danger font-medium">存在{{ returned_evaluations|length }}条已退回评估</span>
+                    {% else %}
+                        <span class="text-success font-medium">无已退回评估</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="collapse mt-3" id="statsDetail">
+            <div class="card card-body border">
+                <h6>详细信息</h6>
+                {% if returned_evaluations %}
+                    <p><strong>已退回评估ID列表:</strong> {{ returned_evaluations|map(attribute='id')|list }}</p>
+                {% endif %}
+                {% if evaluations %}
+                    <p><strong>第一个评估记录详情:</strong></p>
+                    <ul class="list-unstyled">
+                        <li>ID: {{ evaluations[0].id }}</li>
+                        <li>状态: {{ evaluations[0].status }}</li>
+                        <li>关联任务ID: {{ evaluations[0].task.id }}</li>
+                        <li>任务状态: {{ evaluations[0].task.status }}</li>
+                    </ul>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </div>
     
 {% if has_returned_evaluations %}
@@ -83,12 +138,15 @@
                                 {% endfor %}
                                 <td>{{ evaluation.total_score|int }}</td>
                                 <td>
+                                    <!-- 调试信息: evaluation.id={{ evaluation.id }}, evaluation.status={{ evaluation.status }}, task.status={{ task.status }} -->
                                     {% if evaluation.status == 'submitted' %}
                                         <span class="badge badge-success">已提交</span>
                                     {% elif evaluation.status == 'returned' %}
                                         <span class="badge badge-warning">已退回</span>
                                     {% elif evaluation.status == 'withdrawal_requested' %}
                                         <span class="badge badge-info">撤回申请中</span>
+                                    {% else %}
+                                        <span class="badge badge-danger">未知状态: {{ evaluation.status }}</span>
                                     {% endif %}
                                 </td>
                                 <td>

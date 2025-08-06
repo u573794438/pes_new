@@ -38,9 +38,21 @@
                                                         <tr class="{% if selected_task and selected_task.id == task.id %}table-primary{% endif %}" data-task-id="{{ task.id }}">
                                                             <td>{{ task.name }}</td>
                                                             <td>{{ task.year }}年 {{ task.quarter }}季度</td>
-                                                            <td><span class="badge {% if task.status == 'published' %}bg-primary{% else %}bg-secondary{% endif %}">{{ task.status }}</span></td>
                                                             <td>
-                                                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="redirectToBatchEvaluation({{ task.id }})">批量评估</button>
+    {% if task.id in task_evaluation_status %}
+        {% if task_evaluation_status[task.id].has_withdrawal_requested %}
+            <span class="badge bg-warning text-dark">评估状态: 已申请撤回</span>
+        {% elif task_evaluation_status[task.id].has_returned %}
+            <span class="badge bg-danger">评估状态: 已退回</span>
+        {% elif task_evaluation_status[task.id].has_submitted %}
+            <span class="badge bg-success">评估状态: 已提交</span>
+        {% endif %}
+    {% else %}
+        <span class="badge bg-primary">评估状态: 未提交</span>
+    {% endif %}
+</td>
+                                                            <td>
+                                                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="redirectToBatchEvaluation('{{ task.id }}')">批量评估</button>
                                                             </td>
                                                         </tr>
                                                     {% endfor %}

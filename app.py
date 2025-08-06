@@ -369,8 +369,9 @@ def evaluate_page():
     if current_user.is_frozen:
         flash('该账户已被冻结，无法参与评估', 'danger')
         return redirect(url_for('index'))
-    from models import Employee, EvaluationTask
+    from models import Employee, EvaluationTask, EvaluationRecord
     from forms import EvaluationForm
+    from sqlalchemy.orm import joinedload
     form = EvaluationForm()
     current_evaluator = current_user  # 当前登录用户作为评估者
     evaluatees = []
@@ -392,7 +393,29 @@ def evaluate_page():
         if task_id:
             selected_task = EvaluationTask.query.get(task_id)
 
-    return render_template('evaluation/evaluate.html', form=form, current_evaluator=current_evaluator, evaluatees=evaluatees, tasks=tasks, selected_task=selected_task)
+    # 查询当前用户的评估记录状态
+    evaluations = EvaluationRecord.query.filter(
+        EvaluationRecord.evaluator_id == evaluator_id,
+        EvaluationRecord.status.in_(['submitted', 'returned', 'withdrawal_requested'])
+    ).options(joinedload(EvaluationRecord.task)).all()
+
+    # 按任务分组评估记录状态
+    task_evaluation_status = {}
+    for evaluation in evaluations:
+        if evaluation.task_id not in task_evaluation_status:
+            task_evaluation_status[evaluation.task_id] = {
+                'has_submitted': False,
+                'has_returned': False,
+                'has_withdrawal_requested': False
+            }
+        if evaluation.status == 'submitted':
+            task_evaluation_status[evaluation.task_id]['has_submitted'] = True
+        elif evaluation.status == 'returned':
+            task_evaluation_status[evaluation.task_id]['has_returned'] = True
+        elif evaluation.status == 'withdrawal_requested':
+            task_evaluation_status[evaluation.task_id]['has_withdrawal_requested'] = True
+
+    return render_template('evaluation/evaluate.html', form=form, current_evaluator=current_evaluator, evaluatees=evaluatees, tasks=tasks, selected_task=selected_task, task_evaluation_status=task_evaluation_status)
 
 # 获取评估表单
 @app.route('/get_evaluation_form/<int:evaluatee_id>')
