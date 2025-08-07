@@ -1153,26 +1153,18 @@ def admin_evaluation_query():
             ~EvaluationRecord.evaluator_id.in_([admin_employee.id]) &
             ~EvaluationRecord.evaluatee_id.in_([admin_employee.id])
         )
-    # 排除employee_id >= '2'的评估对象
-    non_valid_evaluatees = Employee.query.filter(Employee.employee_id >= '2').all()
-    non_valid_evaluatee_ids = [emp.id for emp in non_valid_evaluatees]
-    if non_valid_evaluatee_ids:
-        query = query.filter(~EvaluationRecord.evaluatee_id.in_(non_valid_evaluatee_ids))
-    # 排除employee_id >= '2'的评估对象
-    non_valid_evaluatees = Employee.query.filter(Employee.employee_id >= '2').all()
-    non_valid_evaluatee_ids = [emp.id for emp in non_valid_evaluatees]
-    if non_valid_evaluatee_ids:
-        query = query.filter(~EvaluationRecord.evaluatee_id.in_(non_valid_evaluatee_ids))
-    # 排除employee_id >= '2'的评估对象
-    non_valid_evaluatees = Employee.query.filter(Employee.employee_id >= '2').all()
-    non_valid_evaluatee_ids = [emp.id for emp in non_valid_evaluatees]
-    if non_valid_evaluatee_ids:
-        query = query.filter(~EvaluationRecord.evaluatee_id.in_(non_valid_evaluatee_ids))
-    # 排除employee_id >= '2'的评估者提交的记录
+    # 包含所有评估对象（排除管理员）
+    # 排除employee_id >= '2'的评估者
     non_valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
     non_valid_evaluator_ids = [emp.id for emp in non_valid_evaluators]
     if non_valid_evaluator_ids:
         query = query.filter(~EvaluationRecord.evaluator_id.in_(non_valid_evaluator_ids))
+    # 排除employee_id >= '2'的被评估者
+    non_valid_evaluatees = Employee.query.filter(Employee.employee_id >= '2').all()
+    non_valid_evaluatee_ids = [emp.id for emp in non_valid_evaluatees]
+    if non_valid_evaluatee_ids:
+        query = query.filter(~EvaluationRecord.evaluatee_id.in_(non_valid_evaluatee_ids))
+        query = query.filter(~EvaluationRecord.evaluatee_id.in_(non_valid_evaluatee_ids))
     if task_id:
         query = query.filter_by(task_id=task_id)
     
@@ -1216,8 +1208,7 @@ def admin_evaluation_query():
     evaluations.sort(key=lambda x: x.task_id)
     flash(f'找到 {len(evaluations)} 条已提交的评估记录', 'info')
 
-    # 获取评估者和被评估者列表
-    # 只包含employee_id < '2'的评估者
+    # 获取评估者和被评估者列表（排除管理员和employee_id >= '2'的人员）
     evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
     evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
     
@@ -1233,7 +1224,9 @@ def admin_evaluation_query():
         
         # 填充评分数据
         for evaluation in task_evaluations:
+            # 排除管理员和employee_id >= '2'的人员已在查询中处理
             if evaluation.evaluator_id in [e.id for e in evaluators] and evaluation.evaluatee_id in [e.id for e in evaluatees]:
+
                 summary_data[evaluation.evaluatee_id][evaluation.evaluator_id] = round(evaluation.total_score, 2)
         
         # 计算平均分
@@ -1290,11 +1283,11 @@ def admin_leader_evaluation_stats():
             ~EvaluationRecord.evaluator_id.in_([admin_employee.id]) &
             ~EvaluationRecord.evaluatee_id.in_([admin_employee.id])
         )
-    # 排除employee_id >= '2'的评估者提交的记录
-    non_valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
-    non_valid_evaluator_ids = [emp.id for emp in non_valid_evaluators]
-    if non_valid_evaluator_ids:
-        query = query.filter(~EvaluationRecord.evaluator_id.in_(non_valid_evaluator_ids))
+    # 只包含employee_id >= '2'的评估者提交的记录
+    valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
+    valid_evaluator_ids = [emp.id for emp in valid_evaluators]
+    if valid_evaluator_ids:
+        query = query.filter(EvaluationRecord.evaluator_id.in_(valid_evaluator_ids))
     if task_id:
         query = query.filter_by(task_id=task_id)
     
@@ -1339,8 +1332,8 @@ def admin_leader_evaluation_stats():
     flash(f'找到 {len(evaluations)} 条已提交的领导评估记录', 'info')
 
     # 获取评估者和被评估者列表
-    # 排除employee_id >= '2'的评估者
-    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+    # 只包含employee_id >= '2'的评估者
+    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id >= '2').all()
     evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
 
     # 生成任务汇总数据
@@ -1394,11 +1387,11 @@ def export_leader_evaluation_summary():
             ~EvaluationRecord.evaluator_id.in_([admin_employee.id]) &
             ~EvaluationRecord.evaluatee_id.in_([admin_employee.id])
         )
-    # 排除employee_id >= '2'的评估者
-    non_valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
-    non_valid_evaluator_ids = [emp.id for emp in non_valid_evaluators]
-    if non_valid_evaluator_ids:
-        query = query.filter(~EvaluationRecord.evaluator_id.in_(non_valid_evaluator_ids))
+    # 只包含employee_id >= '2'的评估者
+    valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
+    valid_evaluator_ids = [emp.id for emp in valid_evaluators]
+    if valid_evaluator_ids:
+        query = query.filter(EvaluationRecord.evaluator_id.in_(valid_evaluator_ids))
     all_evaluations = query.options(joinedload(EvaluationRecord.scores).joinedload(EvaluationScore.dimension)).all()
     
     # 获取任务名称用于文件名
@@ -1408,7 +1401,7 @@ def export_leader_evaluation_summary():
         task = EvaluationTask.query.get(task_id)
         if task:
             task_name = task.name.replace(" ", "_")
-    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id >= '2').all()
     evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
 
     # 调用公共汇总函数生成统计数据
@@ -1498,8 +1491,8 @@ def export_evaluation_summary():
         task = EvaluationTask.query.get(task_id)
         if task:
             task_name = task.name.replace(" ", "_")
-    evaluators = Employee.query.filter(Employee.employee_id != '10000').all()
-    evaluatees = Employee.query.filter(Employee.employee_id != '10000').all()
+    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
 
     # 调用公共汇总函数生成统计数据
     summary_data, averages = generate_evaluation_summary(all_evaluations, evaluators, evaluatees)
