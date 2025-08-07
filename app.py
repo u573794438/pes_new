@@ -48,6 +48,22 @@ def admin_required(f):
             abort(403)
         return f(*args, **kwargs)
     return decorated_function
+
+
+def readonly_admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login', next=request.url))
+        # 检查是否是管理员或者employee_id >= '2'
+        if not (current_user.is_admin or current_user.employee_id >= '2'):
+            abort(403)
+        # 对于employee_id >= '2'的用户，检查是否是GET请求（只读操作）
+        if current_user.employee_id >= '2' and request.method != 'GET':
+            flash('您只能以只读模式访问管理后台', 'danger')
+            return redirect(url_for('admin_dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
 from models import EvaluationDimension as Dimension
 from wtforms import StringField, SelectField, DecimalField, SubmitField, IntegerField, FloatField, FieldList, FormField
 from wtforms.validators import DataRequired, Length, NumberRange, ValidationError
@@ -353,7 +369,7 @@ def index():
 # 管理页面路由
 @app.route('/admin')
 @login_required
-@admin_required
+@readonly_admin_required
 def admin_dashboard():
     return render_template('admin/dashboard.html')
 
@@ -382,10 +398,11 @@ def evaluate_page():
     selected_task = None
     if request.method == 'POST':
         if 'load_evaluatees' in request.form:
-            # 获取除自己之外的所有员工
+            # 获取除自己之外、管理员、被冻结的员工以及ID小于10001的员工
             evaluatees = Employee.query.filter(
     Employee.id != evaluator_id,
     Employee.employee_id != '10000',
+    Employee.employee_id < '2',
     Employee.is_frozen == False
 ).all()
         # 处理任务选择
@@ -481,6 +498,12 @@ def submit_evaluation():
 
     if not evaluator_id or not evaluatee_id or not task_id:
         flash('参数错误', 'danger')
+        return redirect(url_for('evaluate_page'))
+
+    # 验证被评估者的employee_id < '2'
+    evaluatee = Employee.query.get(evaluatee_id)
+    if evaluatee and evaluatee.employee_id >= '2':
+        flash('员工ID大于等于2的不作为被评估对象', 'danger')
         return redirect(url_for('evaluate_page'))
 
     # 获取所有维度
@@ -750,7 +773,7 @@ def submit_batch_evaluation():
 # 评估任务管理路由
 @app.route('/admin/tasks')
 @login_required
-@admin_required
+@readonly_admin_required
 def admin_task_list():
     from models import EvaluationTask
     tasks = EvaluationTask.query.all()
@@ -875,7 +898,7 @@ def admin_employee_reset_password(employee_id):
 
 @app.route('/admin/employees')
 @login_required
-@admin_required
+@readonly_admin_required
 def admin_employee_list():
     from models import Employee
     from forms import EmployeeForm
@@ -972,7 +995,7 @@ def admin_employee_delete(id):
 # 评估维度管理路由
 @app.route('/admin/dimensions')
 @login_required
-@admin_required
+@readonly_admin_required
 def admin_dimension_list():
     from models import EvaluationDimension
     from forms import DimensionForm
@@ -1104,7 +1127,7 @@ def generate_evaluation_summary(evaluations, evaluators, evaluatees):
 # 评估查询路由
 @app.route('/admin/evaluations')
 @login_required
-@admin_required
+@readonly_admin_required
 def admin_evaluation_query():
     from models import Employee, EvaluationRecord, EvaluationTask
     from openpyxl.styles import Font
@@ -1130,6 +1153,26 @@ def admin_evaluation_query():
             ~EvaluationRecord.evaluator_id.in_([admin_employee.id]) &
             ~EvaluationRecord.evaluatee_id.in_([admin_employee.id])
         )
+    # 排除employee_id >= '2'的评估对象
+    non_valid_evaluatees = Employee.query.filter(Employee.employee_id >= '2').all()
+    non_valid_evaluatee_ids = [emp.id for emp in non_valid_evaluatees]
+    if non_valid_evaluatee_ids:
+        query = query.filter(~EvaluationRecord.evaluatee_id.in_(non_valid_evaluatee_ids))
+    # 排除employee_id >= '2'的评估对象
+    non_valid_evaluatees = Employee.query.filter(Employee.employee_id >= '2').all()
+    non_valid_evaluatee_ids = [emp.id for emp in non_valid_evaluatees]
+    if non_valid_evaluatee_ids:
+        query = query.filter(~EvaluationRecord.evaluatee_id.in_(non_valid_evaluatee_ids))
+    # 排除employee_id >= '2'的评估对象
+    non_valid_evaluatees = Employee.query.filter(Employee.employee_id >= '2').all()
+    non_valid_evaluatee_ids = [emp.id for emp in non_valid_evaluatees]
+    if non_valid_evaluatee_ids:
+        query = query.filter(~EvaluationRecord.evaluatee_id.in_(non_valid_evaluatee_ids))
+    # 排除employee_id >= '2'的评估者提交的记录
+    non_valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
+    non_valid_evaluator_ids = [emp.id for emp in non_valid_evaluators]
+    if non_valid_evaluator_ids:
+        query = query.filter(~EvaluationRecord.evaluator_id.in_(non_valid_evaluator_ids))
     if task_id:
         query = query.filter_by(task_id=task_id)
     
@@ -1163,6 +1206,8 @@ def admin_evaluation_query():
     )
     if evaluatee_id:
         query = query.filter_by(evaluatee_id=evaluatee_id)
+    if evaluator_id:
+        query = query.filter_by(evaluator_id=evaluator_id)
     # 强制任务隔离：必须提供task_id才能查询
     if task_id:
         query = query.filter_by(task_id=task_id)
@@ -1172,24 +1217,37 @@ def admin_evaluation_query():
     flash(f'找到 {len(evaluations)} 条已提交的评估记录', 'info')
 
     # 获取评估者和被评估者列表
-    evaluators = Employee.query.filter(Employee.employee_id != '10000').all()
-    evaluatees = Employee.query.filter(Employee.employee_id != '10000').all()
+    # 只包含employee_id < '2'的评估者
+    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
     
-    # 调用公共汇总函数生成统计数据，按任务分组
+    # 生成汇总统计数据
     from itertools import groupby
-
-    # 按task_id分组评估记录
-    evaluations_by_task = groupby(evaluations, key=lambda x: x.task_id)
-
     task_summaries = {}
-    for task_id, task_evaluations in evaluations_by_task:
-        # 转换为列表以便处理
-        task_evaluations_list = list(task_evaluations)
-        # 为每个任务生成汇总数据
-        task_summary_data, task_averages = generate_evaluation_summary(task_evaluations_list, evaluators, evaluatees)
+    # 按任务分组评估记录
+    for task_id, task_evaluations in groupby(evaluations, key=lambda x: x.task_id):
+        task_evaluations = list(task_evaluations)
+        # 初始化该任务的汇总数据
+        summary_data = {e.id: {} for e in evaluatees}
+        averages = {e.id: 0 for e in evaluatees}
+        
+        # 填充评分数据
+        for evaluation in task_evaluations:
+            if evaluation.evaluator_id in [e.id for e in evaluators] and evaluation.evaluatee_id in [e.id for e in evaluatees]:
+                summary_data[evaluation.evaluatee_id][evaluation.evaluator_id] = round(evaluation.total_score, 2)
+        
+        # 计算平均分
+        for evaluatee_id in summary_data:
+            scores = list(summary_data[evaluatee_id].values())
+            if scores:
+                averages[evaluatee_id] = round(sum(scores) / len(scores), 2)
+            else:
+                averages[evaluatee_id] = 0
+        
+        # 保存该任务的汇总数据
         task_summaries[task_id] = {
-            'summary_data': task_summary_data,
-            'averages': task_averages
+            'summary_data': summary_data,
+            'averages': averages
         }
 
     return render_template(
@@ -1198,10 +1256,213 @@ def admin_evaluation_query():
         employees=employees, 
         evaluators=evaluators, 
         evaluatees=evaluatees, 
-        task_summaries=task_summaries, 
-        tasks=tasks
+        tasks=tasks,
+        task_summaries=task_summaries
     )
 
+
+
+# 领导评估统计功能
+@app.route('/admin/leader_evaluation_stats')
+@login_required
+@admin_required
+def admin_leader_evaluation_stats():
+    from models import Employee, EvaluationRecord, EvaluationTask
+    from openpyxl.styles import Font
+    from forms import EvaluationSearchForm
+    evaluatee_id = request.args.get('evaluatee_id')
+    task_id = request.args.get('task_id')
+    evaluator_id = request.args.get('evaluator_id')
+
+    # 获取所有员工和任务用于筛选
+    employees = Employee.query.filter(Employee.employee_id != '10000').all()
+    tasks = EvaluationTask.query.filter_by(status='published').all()
+
+    # 构建查询，预加载关联数据
+    # 查询所有已提交的评估记录
+    from sqlalchemy.orm import joinedload
+    from sqlalchemy import func, and_
+    # 排除管理员相关的评估记录
+    admin_employee = Employee.query.filter_by(employee_id='10000').first()
+    query = EvaluationRecord.query.filter_by(status='submitted').options(joinedload(EvaluationRecord.task), joinedload(EvaluationRecord.evaluator))
+    if admin_employee:
+        query = query.filter(
+            ~EvaluationRecord.evaluator_id.in_([admin_employee.id]) &
+            ~EvaluationRecord.evaluatee_id.in_([admin_employee.id])
+        )
+    # 排除employee_id >= '2'的评估者提交的记录
+    non_valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
+    non_valid_evaluator_ids = [emp.id for emp in non_valid_evaluators]
+    if non_valid_evaluator_ids:
+        query = query.filter(~EvaluationRecord.evaluator_id.in_(non_valid_evaluator_ids))
+    if task_id:
+        query = query.filter_by(task_id=task_id)
+    
+    # 添加去重逻辑：每个评估者-被评估者-任务组合只保留最新记录
+    subquery = query.with_entities(
+        EvaluationRecord.evaluator_id,
+        EvaluationRecord.evaluatee_id,
+        EvaluationRecord.task_id,
+        func.max(EvaluationRecord.id).label('max_id')
+    ).group_by(
+        EvaluationRecord.evaluator_id,
+        EvaluationRecord.evaluatee_id,
+        EvaluationRecord.task_id
+    ).subquery()
+    
+    query = query.join(
+        subquery,
+        and_(
+            EvaluationRecord.evaluator_id == subquery.c.evaluator_id,
+            EvaluationRecord.evaluatee_id == subquery.c.evaluatee_id,
+            EvaluationRecord.task_id == subquery.c.task_id,
+            EvaluationRecord.id == subquery.c.max_id
+        )
+    )
+    
+    query = query.options(
+        joinedload(EvaluationRecord.task),
+        joinedload(EvaluationRecord.evaluator),
+        joinedload(EvaluationRecord.evaluatee),
+        joinedload(EvaluationRecord.scores).joinedload(EvaluationScore.dimension)
+    )
+    if evaluatee_id:
+        query = query.filter_by(evaluatee_id=evaluatee_id)
+    if evaluator_id:
+        query = query.filter_by(evaluator_id=evaluator_id)
+    # 强制任务隔离：必须提供task_id才能查询
+    if task_id:
+        query = query.filter_by(task_id=task_id)
+    evaluations = query.order_by(EvaluationRecord.submitted_at.desc()).all()
+    # 按task_id排序确保groupby能正确分组
+    evaluations.sort(key=lambda x: x.task_id)
+    flash(f'找到 {len(evaluations)} 条已提交的领导评估记录', 'info')
+
+    # 获取评估者和被评估者列表
+    # 排除employee_id >= '2'的评估者
+    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+
+    # 生成任务汇总数据
+    from collections import defaultdict
+    from itertools import groupby
+    # 假设generate_evaluation_summary函数在当前作用域可用
+    task_summaries = defaultdict(dict)
+    # 按任务分组评估记录
+    for task_id, task_evaluations in groupby(evaluations, key=lambda x: x.task_id):
+        task_evaluations_list = list(task_evaluations)
+        # 调用公共汇总函数生成统计数据
+        summary_data, averages = generate_evaluation_summary(task_evaluations_list, evaluators, evaluatees)
+        # 保存汇总数据
+        task_summaries[task_id] = {
+            'summary_data': summary_data,
+            'averages': averages
+        }
+
+    # 评估者和被评估者列表已在上方定义
+    
+    return render_template(
+        'admin/leader_evaluation_stats.html', 
+        evaluations=evaluations, 
+        employees=employees, 
+        tasks=tasks, 
+        evaluators=evaluators, 
+        evaluatees=evaluatees, 
+        task_summaries=task_summaries
+    )
+
+
+# 导出领导评估汇总表
+@app.route('/admin/leader_evaluations/export')
+@login_required
+@admin_required
+def export_leader_evaluation_summary():
+    from flask import send_file
+    from models import Employee, EvaluationRecord, EvaluationTask
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+    from datetime import datetime
+    # 获取所有已提交的评估
+    task_id = request.args.get('task_id', type=int)
+    query = EvaluationRecord.query.filter_by(status='submitted')
+    if task_id:
+        query = query.filter_by(task_id=task_id)
+    # 排除管理员相关的评估记录
+    admin_employee = Employee.query.filter_by(employee_id='10000').first()
+    if admin_employee:
+        query = query.filter(
+            ~EvaluationRecord.evaluator_id.in_([admin_employee.id]) &
+            ~EvaluationRecord.evaluatee_id.in_([admin_employee.id])
+        )
+    # 排除employee_id >= '2'的评估者
+    non_valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
+    non_valid_evaluator_ids = [emp.id for emp in non_valid_evaluators]
+    if non_valid_evaluator_ids:
+        query = query.filter(~EvaluationRecord.evaluator_id.in_(non_valid_evaluator_ids))
+    all_evaluations = query.options(joinedload(EvaluationRecord.scores).joinedload(EvaluationScore.dimension)).all()
+    
+    # 获取任务名称用于文件名
+    task = None
+    task_name = "all_tasks"
+    if task_id:
+        task = EvaluationTask.query.get(task_id)
+        if task:
+            task_name = task.name.replace(" ", "_")
+    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+
+    # 调用公共汇总函数生成统计数据
+    summary_data, averages = generate_evaluation_summary(all_evaluations, evaluators, evaluatees)
+
+    # 计算平均分（保留两位小数用于导出）
+    averages = {eid: round(score, 2) for eid, score in averages.items()}
+
+    # 创建Excel文件
+    df_data = []
+    for evaluatee in evaluatees:
+        row = {'评估对象': evaluatee.name}
+        for evaluator in evaluators:
+            row[evaluator.name] = summary_data[evaluatee.id][evaluator.id]
+        row['平均分'] = averages.get(evaluatee.id, '-')
+        df_data.append(row)
+
+    df = pd.DataFrame(df_data)
+
+    # 保存到内存
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # 添加表头
+        df.to_excel(writer, index=False, sheet_name='领导评估汇总', startrow=1)  # 预留第一行给表头
+        worksheet = writer.sheets['领导评估汇总']
+        
+        # 设置表头文本
+        if task:
+            title = f"信息技术部{task.year}年{task.quarter}季度领导绩效评估汇总"
+        else:
+            title = "信息技术部领导绩效评估汇总"
+        
+        # 创建表头单元格并设置样式
+        worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(df.columns))
+        title_cell = worksheet.cell(row=1, column=1, value=title)
+        title_cell.font = Font(bold=True, size=14)
+        
+        # 设置列宽和单元格样式
+        for column in worksheet.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2) * 1.2
+            worksheet.column_dimensions[column_letter].width = adjusted_width
+
+    # 输出Excel文件
+    output.seek(0)
+    filename = f"{title}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return send_file(output, download_name=filename, as_attachment=True)
 
 
 # 导出评估汇总表
@@ -1223,6 +1484,11 @@ def export_evaluation_summary():
             ~EvaluationRecord.evaluator_id.in_([admin_employee.id]) &
             ~EvaluationRecord.evaluatee_id.in_([admin_employee.id])
         )
+    # 排除employee_id >= '2'的评估者
+    non_valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
+    non_valid_evaluator_ids = [emp.id for emp in non_valid_evaluators]
+    if non_valid_evaluator_ids:
+        query = query.filter(~EvaluationRecord.evaluator_id.in_(non_valid_evaluator_ids))
     all_evaluations = query.options(joinedload(EvaluationRecord.scores).joinedload(EvaluationScore.dimension)).all()
     
     # 获取任务名称用于文件名
@@ -1705,10 +1971,11 @@ def batch_evaluate():
         status='withdrawal_requested'
     ).first() is not None
     
-    # 获取所有被评估者（排除自己、管理员和被冻结的员工）
+    # 获取所有被评估者（排除自己、管理员、被冻结的员工以及ID小于2的员工）
     evaluatees = Employee.query.filter(
         Employee.id != evaluator_id,
         Employee.employee_id != '10000',
+        Employee.employee_id < '2',
         Employee.is_frozen == False
     ).all()
     # 获取所有评估维度

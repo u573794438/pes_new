@@ -60,7 +60,7 @@
     <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
         <div class="card h-100 border-primary">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="bi bi-search me-2"></i>评估查询</h5>
+                <h5 class="mb-0"><i class="bi bi-search me-2"></i>员工评估查询</h5>
             </div>
             <div class="card-body">
                 <p>查询已提交的评估记录，支持按任务筛选和导出评估结果。</p>
@@ -78,6 +78,19 @@
             <div class="card-body">
                 <p>查看和处理员工提交的评估撤回申请，支持批准申请并将评估记录改为可编辑状态。</p>
                 <a href="{{ url_for('withdrawal_requests') }}" class="btn btn-outline-info stretched-link">进入管理</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 领导评估统计卡片 -->
+    <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
+        <div class="card h-100 border-secondary">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0"><i class="bi bi-bar-chart-3 me-2"></i>领导评估统计</h5>
+            </div>
+            <div class="card-body">
+                <p>统计领导（employee_id >= '2'）提交的评估结果，支持按任务筛选和导出统计数据。</p>
+                <a href="{{ url_for('admin_leader_evaluation_stats') }}" class="btn btn-outline-secondary stretched-link">进入统计</a>
             </div>
         </div>
     </div>
