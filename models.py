@@ -106,11 +106,11 @@ class EvaluationScore(db.Model):
     comment = db.Column(db.String(500))
 
     # 关系
-    record = db.relationship('EvaluationRecord')
+    record = db.relationship('EvaluationRecord', overlaps="scores")
     dimension = db.relationship('EvaluationDimension')
 
     def __repr__(self):
-        return f'<EvaluationScore {self.record_id}-{self.dimension_id}: {self.score}>'
+        return f'<EvaluationScore {self.evaluation_record_id}-{self.dimension_id}: {self.score}>'
 
 
 class DimensionDefaultScore(db.Model):

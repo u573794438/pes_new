@@ -587,7 +587,7 @@ def submit_evaluation():
     
     # Find existing score for this record and dimension
     existing_score = EvaluationScore.query.filter_by(
-    record_id=record.id if record else None,
+    evaluation_record_id=record.id if record else None,
     dimension_id=dimension_id
     ).first()
 
@@ -604,7 +604,7 @@ def submit_evaluation():
     # 更新分数
     for dimension_id, score in scores.items():
         score_record = EvaluationScore.query.filter_by(
-                record_id=record.id,
+                evaluation_record_id=record.id,
                 dimension_id=dimension_id
             ).first()
 
@@ -751,12 +751,12 @@ def submit_batch_evaluation():
                 dimension = EvaluationDimension.query.get(dimension_id)
                 if dimension:
                     score_record = EvaluationScore.query.filter_by(
-                        record_id=record.id,
+                        evaluation_record_id=record.id,
                         dimension_id=dimension_id
                     ).first()
                     if not score_record:
                         score_record = EvaluationScore(
-                            record_id=record.id,
+                            evaluation_record_id=record.id,
                             dimension_id=dimension_id,
                             score=score_value
                         )
@@ -829,7 +829,7 @@ def admin_clear_task_data(task_id):
     from sqlalchemy import func, EvaluationScore
     try:
         # 先删除关联的评分记录
-        EvaluationScore.query.filter(EvaluationScore.record_id.in_(
+        EvaluationScore.query.filter(EvaluationScore.evaluation_record_id.in_(
             db.session.query(EvaluationRecord.id).filter_by(task_id=task_id)
         )).delete(synchronize_session=False)
         # 再删除评估记录
