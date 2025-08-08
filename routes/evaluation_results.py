@@ -120,13 +120,16 @@ def admin_generate_evaluation_results():
             leader_score = round(sum(score[0] for score in leader_scores) / len(leader_scores) * 20, 2) if leader_scores else 0
 
             # 计算最终分数（加权合计）
-            final_score = round(
+            weighted_score = round(
                 dept_head_score * 0.4 + 
                 dept_manager_score * 0.15 + 
                 peer_score * 0.15 + 
                 leader_score * 0.3,
                 2
             )
+
+            # 乘以岗位系数并限制最大值为99分
+            final_score = min(round(weighted_score * evaluatee.position_coefficient, 2), 99)
 
             results.append({
                 'name': evaluatee.name,

@@ -53,26 +53,49 @@
                 <h4 class="mb-0">{{ task_name }} - 绩效考评结果</h4>
             </div>
             <div class="card-body">
-                <div class="mb-3">
-                    <p class="text-muted"><strong>部门绩效评级：</strong>{{ selected_department_rating }}</p>
-                    <p class="text-muted"><strong>绩效等级分布规则：</strong></p>
-                    <ul class="text-muted list-disc pl-5">
-                        <li>A档：原则上不低于90分</li>
-                        <li>B档：原则上不低于80分</li>
-                        <li>C档：原则上不低于70分</li>
-                        <li>D档：小于70分</li>
-                    </ul>
-                    <p class="text-muted mt-2"><strong>部门绩效与等级比例：</strong></p>
-                    <ul class="text-muted list-disc pl-5">
-                        {% if selected_department_rating == '甲' %}
-                        <li>A类员工占比：40%，B类员工占比：30%</li>
-                        {% elif selected_department_rating == '乙' %}
-                        <li>A类员工占比：20%，B类员工占比：20%</li>
-                        {% elif selected_department_rating == '丙' %}
-                        <li>A类员工占比：15%，B类员工占比：20%</li>
-                        {% else %}
-                        <li>A类员工占比：10%，B类员工占比：20%</li>
-                        {% endif %}
+                <div class="bg-light rounded-lg p-2 mb-3 border border-gray-200">
+                    <div class="d-flex items-center mb-1">
+                        <span class="badge bg-primary mr-2 text-sm">部门信息</span>
+                        <p class="text-muted mb-0 text-sm"><strong>部门绩效评级：</strong>{{ selected_department_rating }}</p>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6 mb-2">
+                        <div class="bg-light rounded-lg p-2 border border-gray-200 h-100">
+                            <h6 class="text-primary mb-1 text-sm">绩效等级分布规则</h6>
+                            <ul class="text-muted list-disc pl-5 mb-0 text-sm">
+                                <li>A档：原则上不低于90分</li>
+                                <li>B档：原则上不低于80分</li>
+                                <li>C档：原则上不低于70分</li>
+                                <li>D档：小于70分</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="bg-light rounded-lg p-2 border border-gray-200 h-100">
+                            <h6 class="text-primary mb-1 text-sm">部门绩效与等级比例</h6>
+                            <ul class="text-muted list-disc pl-5 mb-0 text-sm">
+                                {% if selected_department_rating == '甲' %}
+                                <li>A类员工占比：40%，B类员工占比：30%</li>
+                                {% elif selected_department_rating == '乙' %}
+                                <li>A类员工占比：20%，B类员工占比：20%</li>
+                                {% elif selected_department_rating == '丙' %}
+                                <li>A类员工占比：15%，B类员工占比：20%</li>
+                                {% else %}
+                                <li>A类员工占比：10%，B类员工占比：20%</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-light rounded-lg p-2 mb-3 border border-gray-200">
+                    <h6 class="text-primary mb-1 text-sm">最终分数计算逻辑</h6>
+                    <ul class="text-muted list-disc pl-5 mb-0 text-sm">
+                        <li>加权合计分数 = 部门负责人分数 × 40% + 部门经理分数 × 15% + 员工互评分数 × 15% + 分管领导分数 × 30%</li>
+                        <li>最终分数 = 加权合计分数 × 岗位系数</li>
+                        <li>若最终分数超过99分，则取99分作为最终结果</li>
                     </ul>
                 </div>
 
