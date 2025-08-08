@@ -29,6 +29,8 @@
                                 <th>ID</th>
                                 <th>姓名</th>
                                 <th>岗位</th>
+                                <th>角色</th>
+                                <th>岗位系数</th>
                                 <th>创建时间</th>
                                 <th>状态</th>
                                 <th>操作</th>
@@ -40,6 +42,8 @@
                                 <td>{{ employee.employee_id }}</td>
                                 <td>{{ employee.name }}</td>
                                 <td>{{ employee.position }}</td>
+                                <td>{{ employee.role }}</td>
+                                <td>{{ employee.position_coefficient }}</td>
                                 <td>{{ employee.created_at|shanghai_time('%Y-%m-%d %H:%M') }}</td>
                                 <td>
                                     {% if employee.is_frozen %}
@@ -50,6 +54,9 @@
                                 </td>
                                 <td>
                                     <div class="btn-group" role="group">
+                                        <a href="{{ url_for('admin_employee_edit', employee_id=employee.employee_id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-pencil"></i> 编辑
+                                        </a>
                                         <a href="{{ url_for('admin_employee_reset_password', employee_id=employee.employee_id) }}" class="btn btn-sm btn-outline-warning">
                                             <i class="bi bi-key"></i> 密码重置
                                         </a>

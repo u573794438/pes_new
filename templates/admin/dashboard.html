@@ -89,8 +89,21 @@
                 <h5 class="mb-0"><i class="bi bi-bar-chart-3 me-2"></i>领导评估统计</h5>
             </div>
             <div class="card-body">
-                <p>统计领导（employee_id >= '2'）提交的评估结果，支持按任务筛选和导出统计数据。</p>
+                <p>统计领导（角色非"员工"）提交的评估结果，支持按任务筛选和导出统计数据。</p>
                 <a href="{{ url_for('admin_leader_evaluation_stats') }}" class="btn btn-outline-secondary stretched-link">进入统计</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 生成考评结果卡片 -->
+    <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
+        <div class="card h-100 border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-spreadsheet-fill me-2"></i>生成考评结果</h5>
+            </div>
+            <div class="card-body">
+                <p>按任务生成绩效考评结果二维表，支持部门绩效评级调整和结果导出。</p>
+                <a href="{{ url_for('evaluation_results.admin_generate_evaluation_results') }}" class="btn btn-outline-primary stretched-link">生成结果</a>
             </div>
         </div>
     </div>

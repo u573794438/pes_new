@@ -15,11 +15,14 @@ class EmployeeForm(FlaskForm):
     employee_id = StringField('员工ID', validators=[DataRequired()])
     name = StringField('姓名', validators=[DataRequired()])
     position = StringField('职位', validators=[DataRequired()])
+    role = SelectField('角色', validators=[DataRequired()], choices=[('员工', '员工'), ('部门负责人', '部门负责人'), ('部门经理', '部门经理'), ('分管领导', '分管领导')])
+    position_coefficient = DecimalField('岗位系数', validators=[DataRequired(), NumberRange(min=0.1, max=3.0)], places=1)
     password = PasswordField('默认密码')
     submit = SubmitField('提交')
 
     def __init__(self, *args, **kwargs):
         self.reset_password = kwargs.pop('reset_password', False)
+        self.edit_id = kwargs.pop('edit_id', None)
         super(EmployeeForm, self).__init__(*args, **kwargs)
 
     def validate_employee_id(self, field):
@@ -28,11 +31,32 @@ class EmployeeForm(FlaskForm):
         if self.reset_password:
             return  # 密码重置场景下不检查ID是否存在
         
-        # 排除当前编辑的员工ID（如果是编辑操作）
-        employee_id = field.data
+        # 获取表单提交的员工ID
+        new_employee_id = field.data
         edit_id = getattr(self, 'edit_id', None)
-        existing = Employee.query.filter_by(employee_id=employee_id).first()
-        if existing and (edit_id is None or existing.id != edit_id):
+        # 调试信息
+        print(f"验证员工ID: new_employee_id={new_employee_id}, edit_id={edit_id}")
+        
+        # 检查ID是否存在于其他员工
+        existing = Employee.query.filter_by(employee_id=new_employee_id).first()
+        
+        # 如果是编辑操作
+        if edit_id:
+            # 获取当前编辑的员工
+            current_employee = Employee.query.get(edit_id)
+            print(f"当前编辑员工: {current_employee}, ID: {current_employee.employee_id if current_employee else None}")
+            
+            # 如果当前员工存在且ID与提交的ID相同，允许更新
+            if current_employee and current_employee.employee_id == new_employee_id:
+                print(f"编辑操作且ID未变化: {new_employee_id}")
+                return
+            # 如果存在其他员工使用相同ID
+            elif existing and existing.id != edit_id:
+                print(f"存在其他员工使用ID: {new_employee_id}")
+                raise ValidationError('该人员ID已存在，请使用其他ID')
+        # 非编辑操作（添加）
+        elif existing:
+            print(f"添加操作时ID已存在: {new_employee_id}")
             raise ValidationError('该人员ID已存在，请使用其他ID')
 
 class EmployeeImportForm(FlaskForm):

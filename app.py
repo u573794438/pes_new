@@ -55,11 +55,11 @@ def readonly_admin_required(f):
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for('login', next=request.url))
-        # 检查是否是管理员或者employee_id >= '2'
-        if not (current_user.is_admin or current_user.employee_id >= '2'):
+        # 检查是否是管理员或者角色非'员工'
+        if not (current_user.is_admin or current_user.role != '员工'):
             abort(403)
-        # 对于employee_id >= '2'的用户，检查是否是GET请求（只读操作）
-        if current_user.employee_id >= '2' and request.method != 'GET':
+        # 对于角色非'员工'的用户，检查是否是GET请求（只读操作）
+        if current_user.role != '员工' and request.method != 'GET':
             flash('您只能以只读模式访问管理后台', 'danger')
             return redirect(url_for('admin_dashboard'))
         return f(*args, **kwargs)
@@ -81,6 +81,23 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a1b2c3d4e5f6g7h8i9j0k1l
 basedir = os.path.dirname(os.path.abspath(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'performance_evaluation.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# 初始化CSRF保护
+csrf = CSRFProtect(app)
+
+# 添加CSRF错误处理器
+@app.errorhandler(400)
+def handle_bad_request(e):
+    if 'CSRF token is missing' in str(e):
+        app.logger.error('CSRF令牌缺失错误: %s', e)
+    elif 'CSRF token not set' in str(e):
+        app.logger.error('CSRF令牌未设置错误: %s', e)
+    elif 'CSRF token mismatch' in str(e):
+        app.logger.error('CSRF令牌不匹配错误: %s', e)
+    else:
+        app.logger.error('其他400错误: %s', e)
+    return e, 400
+
 db.init_app(app)
 import pytz
 from datetime import datetime
@@ -93,9 +110,6 @@ def shanghai_time_filter(dt, format='%Y-%m-%d %H:%M:%S'):
     utc_dt = pytz.utc.localize(dt)
     shanghai_tz = pytz.timezone('Asia/Shanghai')
     return utc_dt.astimezone(shanghai_tz).strftime(format)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'performance_evaluation.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
 # 初始化Flask-Login
@@ -123,9 +137,6 @@ def login():
         next_page = request.args.get('next')
         return redirect(next_page or url_for('index'))
     return render_template('auth/login.html', form=form)
-
-db.init_app(app)
-csrf = CSRFProtect(app)
 
 # 创建数据库表
 from sqlalchemy import inspect
@@ -402,7 +413,7 @@ def evaluate_page():
             evaluatees = Employee.query.filter(
     Employee.id != evaluator_id,
     Employee.employee_id != '10000',
-    Employee.employee_id < '2',
+    Employee.role == '员工',
     Employee.is_frozen == False
 ).all()
         # 处理任务选择
@@ -500,10 +511,10 @@ def submit_evaluation():
         flash('参数错误', 'danger')
         return redirect(url_for('evaluate_page'))
 
-    # 验证被评估者的employee_id < '2'
+    # 验证被评估者的角色是'员工'
     evaluatee = Employee.query.get(evaluatee_id)
-    if evaluatee and evaluatee.employee_id >= '2':
-        flash('员工ID大于等于2的不作为被评估对象', 'danger')
+    if evaluatee and evaluatee.role != '员工':
+        flash('非员工角色的不作为被评估对象', 'danger')
         return redirect(url_for('evaluate_page'))
 
     # 获取所有维度
@@ -845,6 +856,73 @@ def admin_delete_task(id):
         flash(f'删除失败: {str(e)}', 'danger')
     return redirect(url_for('admin_task_list'))
 
+# 维度默认值路由
+@app.route('/get_dimension_defaults')
+@login_required
+def get_dimension_defaults():
+    from models import DimensionDefaultScore
+    # 获取当前用户的维度默认值
+    try:
+        defaults = DimensionDefaultScore.query.filter_by(
+            employee_id=current_user.employee_id
+        ).all()
+        # 转换为字典格式: {dimension_id: default_score}
+        result = {str(default.dimension_id): default.default_score for default in defaults}
+        return jsonify(result)
+    except Exception as e:
+        current_app.logger.error(f'获取维度默认值失败: {str(e)}')
+        return jsonify({}), 500
+
+
+@app.route('/save_dimension_defaults', methods=['POST'])
+@login_required
+def save_dimension_defaults():
+    from models import db, DimensionDefaultScore, EvaluationDimension
+    # 保存当前用户的维度默认值
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'success': False, 'message': '没有提供数据'}), 400
+
+        # 开始数据库事务
+        for dimension_id, default_score in data.items():
+            # 验证维度ID和默认值
+            try:
+                dim_id = int(dimension_id)
+                score = float(default_score)
+                if not (1 <= score <= 5 and score % 0.5 == 0):
+                    raise ValueError(f'评分 {score} 不在有效范围内(1-5，步长0.5)')
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'message': f'无效的维度ID或评分: {dimension_id}={default_score}'}), 400
+
+            # 检查维度是否存在
+            dimension = EvaluationDimension.query.get(dim_id)
+            if not dimension:
+                return jsonify({'success': False, 'message': f'维度ID {dim_id} 不存在'}), 400
+
+            # 获取或创建默认值记录
+            default_record = DimensionDefaultScore.query.filter_by(
+                employee_id=current_user.employee_id,
+                dimension_id=dim_id
+            ).first()
+
+            if default_record:
+                default_record.default_score = score
+            else:
+                default_record = DimensionDefaultScore(
+                    employee_id=current_user.employee_id,
+                    dimension_id=dim_id,
+                    default_score=score
+                )
+                db.session.add(default_record)
+
+        db.session.commit()
+        return jsonify({'success': True, 'message': '维度默认值保存成功'})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'保存维度默认值失败: {str(e)}')
+        return jsonify({'success': False, 'message': f'保存失败: {str(e)}'}), 500
+
 # 员工管理路由
 @app.route('/admin/employees/reset-password/<string:employee_id>', methods=['GET', 'POST'])
 @login_required
@@ -918,7 +996,9 @@ def admin_employee_add():
         employee = Employee(
             employee_id=form.employee_id.data,
             name=form.name.data,
-            position=form.position.data
+            position=form.position.data,
+            role=form.role.data,
+            position_coefficient=form.position_coefficient.data
         )
         employee.set_password(form.password.data)
         db.session.add(employee)
@@ -941,8 +1021,10 @@ def admin_employee_edit(employee_id):
     form = EmployeeForm(obj=employee, edit_id=employee.id)
     if form.validate_on_submit():
             try:
-                # 只更新职位字段
+                # 更新字段
                 employee.position = form.position.data
+                employee.role = form.role.data
+                employee.position_coefficient = form.position_coefficient.data
                 # 如果密码不为空，则更新密码
                 if form.password.data:
                     employee.set_password(form.password.data)
@@ -953,6 +1035,12 @@ def admin_employee_edit(employee_id):
             except Exception as e:
                 db.session.rollback()
                 flash(f'更新失败: {str(e)}', 'danger')
+    else:
+        # 表单验证失败时显示错误信息
+        if form.errors:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    flash(f'{getattr(form, field).label.text}：{error}', 'danger')
     return render_template('admin/employee_form.html', form=form, employee=employee)
 
 @app.route('/admin/employees/toggle-frozen/<string:employee_id>')
@@ -1154,13 +1242,13 @@ def admin_evaluation_query():
             ~EvaluationRecord.evaluatee_id.in_([admin_employee.id])
         )
     # 包含所有评估对象（排除管理员）
-    # 排除employee_id >= '2'的评估者
-    non_valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
+    # 排除角色非'员工'的评估者
+    non_valid_evaluators = Employee.query.filter(Employee.role != '员工').all()
     non_valid_evaluator_ids = [emp.id for emp in non_valid_evaluators]
     if non_valid_evaluator_ids:
         query = query.filter(~EvaluationRecord.evaluator_id.in_(non_valid_evaluator_ids))
-    # 排除employee_id >= '2'的被评估者
-    non_valid_evaluatees = Employee.query.filter(Employee.employee_id >= '2').all()
+    # 排除角色非'员工'的被评估者
+    non_valid_evaluatees = Employee.query.filter(Employee.role != '员工').all()
     non_valid_evaluatee_ids = [emp.id for emp in non_valid_evaluatees]
     if non_valid_evaluatee_ids:
         query = query.filter(~EvaluationRecord.evaluatee_id.in_(non_valid_evaluatee_ids))
@@ -1209,8 +1297,8 @@ def admin_evaluation_query():
     flash(f'找到 {len(evaluations)} 条已提交的评估记录', 'info')
 
     # 获取评估者和被评估者列表（排除管理员和employee_id >= '2'的人员）
-    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
-    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.role == '员工').all()
+    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.role == '员工').all()
     
     # 生成汇总统计数据
     from itertools import groupby
@@ -1283,8 +1371,8 @@ def admin_leader_evaluation_stats():
             ~EvaluationRecord.evaluator_id.in_([admin_employee.id]) &
             ~EvaluationRecord.evaluatee_id.in_([admin_employee.id])
         )
-    # 只包含employee_id >= '2'的评估者提交的记录
-    valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
+    # 只包含角色非'员工'的评估者提交的记录
+    valid_evaluators = Employee.query.filter(Employee.role != '员工').all()
     valid_evaluator_ids = [emp.id for emp in valid_evaluators]
     if valid_evaluator_ids:
         query = query.filter(EvaluationRecord.evaluator_id.in_(valid_evaluator_ids))
@@ -1332,9 +1420,9 @@ def admin_leader_evaluation_stats():
     flash(f'找到 {len(evaluations)} 条已提交的领导评估记录', 'info')
 
     # 获取评估者和被评估者列表
-    # 只包含employee_id >= '2'的评估者
-    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id >= '2').all()
-    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+    # 只包含角色非'员工'的评估者
+    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.role != '员工').all()
+    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.role == '员工').all()
 
     # 生成任务汇总数据
     from collections import defaultdict
@@ -1388,7 +1476,7 @@ def export_leader_evaluation_summary():
             ~EvaluationRecord.evaluatee_id.in_([admin_employee.id])
         )
     # 只包含employee_id >= '2'的评估者
-    valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
+    valid_evaluators = Employee.query.filter(Employee.role != '员工').all()
     valid_evaluator_ids = [emp.id for emp in valid_evaluators]
     if valid_evaluator_ids:
         query = query.filter(EvaluationRecord.evaluator_id.in_(valid_evaluator_ids))
@@ -1401,8 +1489,8 @@ def export_leader_evaluation_summary():
         task = EvaluationTask.query.get(task_id)
         if task:
             task_name = task.name.replace(" ", "_")
-    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id >= '2').all()
-    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.role != '员工').all()
+    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.role == '员工').all()
 
     # 调用公共汇总函数生成统计数据
     summary_data, averages = generate_evaluation_summary(all_evaluations, evaluators, evaluatees)
@@ -1478,7 +1566,7 @@ def export_evaluation_summary():
             ~EvaluationRecord.evaluatee_id.in_([admin_employee.id])
         )
     # 排除employee_id >= '2'的评估者
-    non_valid_evaluators = Employee.query.filter(Employee.employee_id >= '2').all()
+    non_valid_evaluators = Employee.query.filter(Employee.role != '员工').all()
     non_valid_evaluator_ids = [emp.id for emp in non_valid_evaluators]
     if non_valid_evaluator_ids:
         query = query.filter(~EvaluationRecord.evaluator_id.in_(non_valid_evaluator_ids))
@@ -1491,8 +1579,8 @@ def export_evaluation_summary():
         task = EvaluationTask.query.get(task_id)
         if task:
             task_name = task.name.replace(" ", "_")
-    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
-    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.employee_id < '2').all()
+    evaluators = Employee.query.filter(Employee.employee_id != '10000', Employee.role == '员工').all()
+    evaluatees = Employee.query.filter(Employee.employee_id != '10000', Employee.role == '员工').all()
 
     # 调用公共汇总函数生成统计数据
     summary_data, averages = generate_evaluation_summary(all_evaluations, evaluators, evaluatees)
@@ -1968,7 +2056,7 @@ def batch_evaluate():
     evaluatees = Employee.query.filter(
         Employee.id != evaluator_id,
         Employee.employee_id != '10000',
-        Employee.employee_id < '2',
+        Employee.role == '员工',
         Employee.is_frozen == False
     ).all()
     # 获取所有评估维度
@@ -1983,6 +2071,11 @@ def batch_evaluate():
                           evaluatees=evaluatees, 
                           dimensions=dimensions, 
                           has_pending_withdrawal=has_pending_withdrawal)
+
+# 延迟导入评估结果相关路由，避免循环导入
+@app.before_first_request
+def import_evaluation_results():
+    import routes.evaluation_results
 
 if __name__ == '__main__':
     with app.app_context():
@@ -2024,6 +2117,11 @@ if __name__ == '__main__':
         finally:
             print("数据库初始化流程结束")
 
-app.run(debug=True, host='0.0.0.0', port=3008, use_reloader=False)
+# 导入并注册评估结果蓝图
+from routes.evaluation_results import evaluation_results_bp
+app.register_blueprint(evaluation_results_bp)
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=3008, use_reloader=False)
 
 

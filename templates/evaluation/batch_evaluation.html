@@ -45,7 +45,7 @@
                         <td class="text-end"><strong>维度默认值：</strong></td>
                         {% for dimension in dimensions %}
                             <td>
-                                <input type="number" id="fillScoreInput-{{ dimension.id }}" class="form-control score-input" min="1" max="5" step="0.5" value="3.5" placeholder="">
+                                <input type="number" id="fillScoreInput-{{ dimension.id }}" class="form-control score-input" min="1" max="5" step="0.5" placeholder="">
                             </td>
                         {% endfor %}
                     </tr>
@@ -105,29 +105,85 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('按钮元素:', fillAllScoresBtn);
     console.log('列填充输入框数量:', columnFillInputs.length);
 
-    // 加载保存的默认值
+    // 从服务器加载用户维度默认值
     function loadDefaultScores() {
-        const savedScores = localStorage.getItem('dimensionDefaultScores');
-        if (savedScores) {
-            try {
-                const scores = JSON.parse(savedScores);
-                columnFillInputs.forEach((input, index) => {
-                    if (scores[index] !== undefined) {
-                        input.value = scores[index];
-                        console.log('加载保存的默认值: 第 ' + (index + 1) + ' 列为 ' + scores[index]);
+        console.log('从服务器加载维度默认值');
+        fetch('{{ url_for('get_dimension_defaults') }}')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应错误');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('加载到的默认值:', data);
+                columnFillInputs.forEach(input => {
+                    const dimensionId = input.id.split('-')[1];
+                    if (data[dimensionId] !== undefined) {
+                        input.value = data[dimensionId];
+                        console.log('设置维度 ' + dimensionId + ' 的默认值为 ' + data[dimensionId]);
                     }
                 });
-            } catch (e) {
-                console.error('解析保存的默认值失败:', e);
-            }
-        }
+            })
+            .catch(error => {
+                console.error('加载默认值失败:', error);
+                // 加载失败时使用本地存储的后备值
+                const savedScores = localStorage.getItem('dimensionDefaultScores');
+                if (savedScores) {
+                    try {
+                        const scores = JSON.parse(savedScores);
+                        columnFillInputs.forEach((input, index) => {
+                            if (scores[index] !== undefined) {
+                                input.value = scores[index];
+                            }
+                        });
+                    } catch (e) {
+                        console.error('解析本地存储的默认值失败:', e);
+                    }
+                }
+            });
     }
 
-    // 保存默认值
+    // 保存维度默认值到服务器
     function saveDefaultScores() {
-        const scores = Array.from(columnFillInputs).map(input => input.value);
-        localStorage.setItem('dimensionDefaultScores', JSON.stringify(scores));
-        console.log('保存默认值到localStorage:', scores);
+        const scores = {};
+        columnFillInputs.forEach(input => {
+            const dimensionId = input.id.split('-')[1];
+            scores[dimensionId] = input.value;
+        });
+
+        console.log('保存默认值到服务器:', scores);
+        fetch('{{ url_for('save_dimension_defaults') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify(scores)
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('保存默认值失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('保存成功:', data);
+                alert('默认值已保存，下次评估时将自动加载');
+
+                // 备份到localStorage
+                const scoresArray = Array.from(columnFillInputs).map(input => input.value);
+                localStorage.setItem('dimensionDefaultScores', JSON.stringify(scoresArray));
+            })
+            .catch(error => {
+                console.error('保存默认值失败:', error);
+                alert('保存默认值失败，请稍后重试');
+
+                // 尝试保存到localStorage作为后备
+                const scoresArray = Array.from(columnFillInputs).map(input => input.value);
+                localStorage.setItem('dimensionDefaultScores', JSON.stringify(scoresArray));
+                console.log('已保存到localStorage作为后备');
+            });
     }
 
     // 为每个列填充输入框添加实时验证
@@ -190,7 +246,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // 保存默认值
                 saveDefaultScores();
-                alert('默认值已保存，下次评估时将自动加载');
 
                 // 2秒后移除成功提示
                 setTimeout(() => {
@@ -208,7 +263,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('未找到一键填充按钮');
     }
 
-    // 页面加载时尝试加载保存的默认值
+    // 页面加载时从服务器获取默认值
     loadDefaultScores();
 });
 </script>

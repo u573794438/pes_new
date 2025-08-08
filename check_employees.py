@@ -11,23 +11,23 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
 with app.app_context():
-    # 查询employee_id小于"2"的员工
-    count = Employee.query.filter(Employee.employee_id < "2").count()
-    print(f'employee_id小于2的员工数量: {count}')
+    # 查询角色是"员工"的员工
+    count = Employee.query.filter(Employee.role == "员工").count()
+    print(f'角色是员工的员工数量: {count}')
 
     # 查看具体员工信息
-    employees = Employee.query.filter(Employee.employee_id < "2").all()
+    employees = Employee.query.filter(Employee.role == "员工").all()
     if employees:
         print('员工列表:')
         for emp in employees:
             print(f'- id: {emp.id}, employee_id: {emp.employee_id}, name: {emp.name}')
 
-    # 查询employee_id大于"2"的员工
-    count = Employee.query.filter(Employee.employee_id > "2").count()
-    print(f'employee_id大于2的员工数量: {count}')
+    # 查询角色非"员工"的员工
+    count = Employee.query.filter(Employee.role != "员工").count()
+    print(f'角色非员工的员工数量: {count}')
 
     # 查看具体员工信息
-    employees = Employee.query.filter(Employee.employee_id > "2").all()
+    employees = Employee.query.filter(Employee.role != "员工").all()
     if employees:
         print('员工列表:')
         for emp in employees:

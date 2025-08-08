@@ -5,7 +5,7 @@
     {{ form.hidden_tag() }}
 
     <div class="card p-3 border mb-3">
-        <h6 class="text-muted mb-3">请为以下维度打分 (1-5分，5分为最高分)</h6>
+        <h6 class="text-muted mb-3">请为以下维度打分 (1-5分，系统将自动转换为百分制显示)</h6>
 
         {% for score in form.scores %}
             {% set dimension = dimensions[loop.index0] if loop.index0 < dimensions|length else None %}
@@ -29,7 +29,7 @@
     </div>
 
     <div class="card p-3 border mb-3 bg-light">
-        <h6><strong>总分预览: <span id="totalScore">0</span>/100</strong></h6>
+        <h6><strong>总分预览: <span id="totalScore">0</span>/100 (基于5分制转换)</strong></h6>
         <p class="text-muted">注: 总分根据各维度得分和权重计算得出</p>
     </div>
 

@@ -62,6 +62,32 @@
                         {% endif %}
                         <div class="form-text">请输入员工岗位</div>
                     </div>
+
+                    <div class="mb-3">
+                        {{ form.role.label(class="form-label") }}
+                        {{ form.role(class="form-control" + (' is-invalid' if form.role.errors else '')) }}
+                        {% if form.role.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.role.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">请选择员工角色</div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.position_coefficient.label(class="form-label") }}
+                        {{ form.position_coefficient(class="form-control" + (' is-invalid' if form.position_coefficient.errors else '')) }}
+                        {% if form.position_coefficient.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.position_coefficient.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">请输入岗位系数（精确到一位小数）</div>
+                    </div>
                     {% endif %}
 
                     <div class="mb-3">
